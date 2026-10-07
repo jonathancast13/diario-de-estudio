@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Diario de Estudio</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="contenedor">
+
+    <!-- Título de la web -->
+    <header class="cabecera">
+      <h1>📚 Diario de Estudio</h1>
+    </header>
+
+    <!-- Racha actual y resumen -->
+    <section class="racha" aria-label="Racha actual y resumen">
+      <span class="racha-fuego" aria-hidden="true">🔥</span>
+      <span class="racha-numero" id="rachaNumero">0</span>
+      <span class="racha-texto" id="rachaTexto">días seguidos estudiando</span>
+
+      <div class="resumen">
+        <div class="resumen-item">
+          <p class="resumen-valor"><span id="mejorRachaNumero">0</span> <span class="resumen-unidad">días</span></p>
+          <p class="resumen-etiqueta">🏆 Mejor racha</p>
+        </div>
+        <div class="resumen-item">
+          <p class="resumen-valor"><span id="minutosSemanaNumero">0</span> <span class="resumen-unidad" id="minutosSemanaTexto">minutos</span></p>
+          <p class="resumen-etiqueta">⏱ Esta semana</p>
+        </div>
+        <div class="resumen-item">
+          <p class="resumen-valor"><span id="diasMesNumero">0</span> <span class="resumen-unidad" id="diasMesTexto">días</span></p>
+          <p class="resumen-etiqueta">📅 Este mes</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Mapa de calor: últimas 12 semanas -->
+    <section class="tarjeta" aria-label="Mapa de calor de las últimas 12 semanas">
+      <h2>📅 Últimas 12 semanas</h2>
+      <div class="heatmap-container">
+        <div class="heatmap-tooltip" id="heatmapTooltip" role="status" hidden></div>
+        <div class="heatmap-grid" id="heatmapGrid"></div>
+      </div>
+      <div class="heatmap-legend">
+        <span class="legend-item"><span class="legend-swatch level-empty"></span> Sin sesión</span>
+        <span class="legend-item"><span class="legend-swatch level-soft"></span> 1–30 min</span>
+        <span class="legend-item"><span class="legend-swatch level-medium"></span> 31–60 min</span>
+        <span class="legend-item"><span class="legend-swatch level-high"></span> 61+ min</span>
+      </div>
+    </section>
+
+    <!-- Formulario para registrar una sesión -->
+    <section class="tarjeta">
+      <h2>Nueva sesión</h2>
+      <form id="formularioSesion">
+        <div class="campo">
+          <label for="fecha">Fecha</label>
+          <input type="date" id="fecha" name="fecha" required>
+        </div>
+
+        <div class="campo">
+          <label for="tema">Tema</label>
+          <input type="text" id="tema" name="tema" placeholder="Ej. Javascript" required>
+        </div>
+
+        <div class="campo">
+          <label for="minutos">Minutos</label>
+          <input type="number" id="minutos" name="minutos" min="1" placeholder="Ej. 45" required>
+        </div>
+
+        <button type="submit" class="boton">Guardar sesión</button>
+      </form>
+    </section>
+
+    <!-- Lista de sesiones -->
+    <section class="tarjeta">
+      <h2>Mis sesiones</h2>
+      <p class="vacio" id="mensajeVacio">Todavía no has registrado ninguna sesión.</p>
+      <ul class="lista" id="listaSesiones"></ul>
+    </section>
+
+  </main>
+
+  <script src="logic.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
