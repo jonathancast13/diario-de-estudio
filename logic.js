@@ -1,4 +1,5 @@
-/* ===== Diario de Estudio — heat map logic =====
+/* ===== Diario de Estudio — pure logic =====
+ * Heat map (spec 001) + edit/delete sessions (spec 002).
  * Pure functions: no DOM, no localStorage. "hoy" is always a parameter
  * (constitution rule 3). Dates are always local, never UTC (rule 5).
  * Loaded as a classic <script> in the browser and required from Node tests
@@ -60,17 +61,23 @@ function classifyMinutes(minutes) {
   return "high";
 }
 
+// Minutes are valid when they are a finite number greater than 0.
+// One single rule shared by session validation and editing (spec 002, RF-2).
+function isValidMinutes(minutes) {
+  return (
+    typeof minutes === "number" &&
+    Number.isFinite(minutes) &&
+    minutes > 0
+  );
+}
+
 // A session is valid when the date is real and the minutes are a
 // finite number greater than 0 (RF-4: invalid data is only ignored,
 // never repaired or deleted)
 function isValidSession(session) {
   if (typeof session !== "object" || session === null) return false;
   if (!isValidDateText(session.fecha)) return false;
-  return (
-    typeof session.minutos === "number" &&
-    Number.isFinite(session.minutos) &&
-    session.minutos > 0
-  );
+  return isValidMinutes(session.minutos);
 }
 
 // "YYYY-MM-DD" -> sum of valid minutes of that day (RF-2).
@@ -104,6 +111,56 @@ function buildHeatmap(hoy, sessions) {
   return cells;
 }
 
+// ==== Spec 002 — edit and delete sessions ====
+// All of them are pure: they receive a list and return a NEW list or object;
+// the input is never mutated (constitution rule 5, plan decision T6).
+// They do not take "hoy": editing and deleting never depend on the date
+// (plan decision T1).
+
+// Problems with an edition, returned as codes that the interface turns
+// into Spanish text (plan decision T7): "emptyTopic" and "invalidMinutes".
+function validateSessionChanges(changes) {
+  const errors = [];
+  const topicIsValid =
+    changes !== null &&
+    typeof changes === "object" &&
+    typeof changes.tema === "string" &&
+    changes.tema.trim() !== "";
+  if (!topicIsValid) errors.push("emptyTopic");
+  if (!changes || !isValidMinutes(changes.minutos)) {
+    errors.push("invalidMinutes");
+  }
+  return errors;
+}
+
+// Applies an edition to one session (RF-1). Only "tema" (trimmed) and
+// "minutos" are taken from the changes: fecha and id never change (RF-3).
+// Invalid changes save nothing and report the errors back (RF-2).
+function editSession(sessions, id, changes) {
+  const errors = validateSessionChanges(changes);
+  if (errors.length > 0) {
+    return { ok: false, errors: errors, sessions: sessions };
+  }
+  const edited = sessions.map((session) =>
+    session.id === id
+      ? { ...session, tema: changes.tema.trim(), minutos: changes.minutos }
+      : session
+  );
+  return { ok: true, errors: [], sessions: edited };
+}
+
+// Returns a new list without that session (RF-4). The removed object is
+// not touched, so the caller can keep it to offer "undo" later (RF-7).
+function removeSession(sessions, id) {
+  return sessions.filter((session) => session.id !== id);
+}
+
+// Puts a removed session back with its original values (RF-7).
+// The list is sorted again when it is painted, so appending is enough.
+function restoreSession(sessions, session) {
+  return [...sessions, session];
+}
+
 // Browser: the functions above become globals.
 // Node (tests): export them. No build step needed (plan decision T1).
 if (typeof module !== "undefined" && module.exports) {
@@ -113,5 +170,10 @@ if (typeof module !== "undefined" && module.exports) {
     isValidSession,
     buildDayTotals,
     buildHeatmap,
+    isValidMinutes,
+    validateSessionChanges,
+    editSession,
+    removeSession,
+    restoreSession,
   };
 }

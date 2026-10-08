@@ -10,6 +10,12 @@ const {
   isValidSession,
   buildDayTotals,
   buildHeatmap,
+  // Spec 002 — edit and delete sessions
+  isValidMinutes,
+  validateSessionChanges,
+  editSession,
+  removeSession,
+  restoreSession,
 } = require("./logic.js");
 
 // Fixed local dates used across tests
@@ -186,4 +192,173 @@ test("the window depends on 'hoy' (midnight, case 7)", () => {
   assert.equal(ayer.length, 79); // one day less than today
   assert.equal(hoy.length, 80);
   assert.notEqual(ayer[ayer.length - 1].fecha, hoy[hoy.length - 1].fecha);
+});
+
+// ==== Spec 002 — editar y borrar sesiones ====
+
+// ---- isValidMinutes (RF-2, one single rule for "valid minutes") ----
+
+test("isValidMinutes: only finite numbers greater than 0", () => {
+  assert.equal(isValidMinutes(1), true);
+  assert.equal(isValidMinutes(45), true);
+  assert.equal(isValidMinutes(0), false);
+  assert.equal(isValidMinutes(-10), false);
+  assert.equal(isValidMinutes("45"), false); // string, not number
+  assert.equal(isValidMinutes(NaN), false);
+  assert.equal(isValidMinutes(Infinity), false);
+  assert.equal(isValidMinutes(undefined), false);
+  assert.equal(isValidMinutes(null), false);
+});
+
+// ---- validateSessionChanges (RF-2) ----
+
+test("validateSessionChanges: valid changes produce no errors", () => {
+  assert.deepStrictEqual(validateSessionChanges({ tema: "CSS", minutos: 45 }), []);
+  assert.deepStrictEqual(validateSessionChanges({ tema: "  CSS  ", minutos: 1 }), []);
+});
+
+test("validateSessionChanges: empty topic and invalid minutes return codes (RF-2)", () => {
+  assert.deepStrictEqual(validateSessionChanges({ tema: "", minutos: 45 }), [
+    "emptyTopic",
+  ]);
+  assert.deepStrictEqual(validateSessionChanges({ tema: "   ", minutos: 45 }), [
+    "emptyTopic",
+  ]);
+  assert.deepStrictEqual(validateSessionChanges({ tema: "CSS", minutos: 0 }), [
+    "invalidMinutes",
+  ]);
+  assert.deepStrictEqual(validateSessionChanges({ tema: "CSS", minutos: -10 }), [
+    "invalidMinutes",
+  ]);
+  assert.deepStrictEqual(validateSessionChanges({ tema: "CSS", minutos: "45" }), [
+    "invalidMinutes",
+  ]);
+  assert.deepStrictEqual(validateSessionChanges({ tema: "CSS", minutos: NaN }), [
+    "invalidMinutes",
+  ]);
+  assert.deepStrictEqual(validateSessionChanges({ tema: "CSS" }), ["invalidMinutes"]);
+  // both problems at once
+  assert.deepStrictEqual(validateSessionChanges({ tema: "", minutos: 0 }), [
+    "emptyTopic",
+    "invalidMinutes",
+  ]);
+  assert.deepStrictEqual(validateSessionChanges(null), [
+    "emptyTopic",
+    "invalidMinutes",
+  ]);
+});
+
+// ---- editSession (RF-1, RF-2, RF-3) ----
+
+test("editSession updates topic and minutes without mutating the input (RF-1)", () => {
+  const sesiones = [
+    { id: 1, fecha: "2026-10-05", tema: "CSS", minutos: 30 },
+    { id: 2, fecha: "2026-10-06", tema: "HTML", minutos: 45 },
+  ];
+  const copia = JSON.parse(JSON.stringify(sesiones));
+
+  const resultado = editSession(sesiones, 1, { tema: "CSS Grid", minutos: 65 });
+
+  assert.equal(resultado.ok, true);
+  assert.deepStrictEqual(resultado.errors, []);
+  assert.equal(resultado.sessions.length, 2);
+  assert.deepStrictEqual(resultado.sessions[0], {
+    id: 1,
+    fecha: "2026-10-05",
+    tema: "CSS Grid",
+    minutos: 65,
+  });
+  assert.deepStrictEqual(resultado.sessions[1], sesiones[1]); // the other one stays
+  assert.deepStrictEqual(sesiones, copia); // input untouched
+  assert.notEqual(resultado.sessions, sesiones); // new array, not the same reference
+});
+
+test("editSession trims the topic before saving", () => {
+  const sesiones = [{ id: 1, fecha: "2026-10-05", tema: "CSS", minutos: 30 }];
+  const resultado = editSession(sesiones, 1, { tema: "  JS  ", minutos: 45 });
+  assert.equal(resultado.sessions[0].tema, "JS");
+});
+
+test("editSession rejects invalid changes and keeps the list as it was (RF-2)", () => {
+  const sesiones = [{ id: 1, fecha: "2026-10-05", tema: "CSS", minutos: 30 }];
+  const copia = JSON.parse(JSON.stringify(sesiones));
+
+  const temaVacio = editSession(sesiones, 1, { tema: "", minutos: 45 });
+  assert.equal(temaVacio.ok, false);
+  assert.deepStrictEqual(temaVacio.errors, ["emptyTopic"]);
+  assert.deepStrictEqual(temaVacio.sessions, sesiones); // same data, nothing saved
+
+  const minutosCero = editSession(sesiones, 1, { tema: "CSS", minutos: 0 });
+  assert.equal(minutosCero.ok, false);
+  assert.deepStrictEqual(minutosCero.errors, ["invalidMinutes"]);
+
+  assert.deepStrictEqual(sesiones, copia); // the original list never changes
+});
+
+test("editSession never changes fecha or id, even if the changes carry them (RF-3)", () => {
+  const sesiones = [{ id: 7, fecha: "2026-10-05", tema: "CSS", minutos: 30 }];
+  const resultado = editSession(sesiones, 7, {
+    tema: "JS",
+    minutos: 45,
+    fecha: "2026-11-30", // try to move the session to another day
+    id: 999, // try to change its identity
+  });
+  assert.equal(resultado.ok, true);
+  assert.equal(resultado.sessions[0].fecha, "2026-10-05"); // fecha fija
+  assert.equal(resultado.sessions[0].id, 7);
+});
+
+// ---- removeSession / restoreSession (RF-4, RF-5, RF-7) ----
+
+test("removeSession drops only the chosen session and never mutates (RF-4)", () => {
+  const sesiones = [
+    { id: 1, fecha: "2026-10-05", tema: "CSS", minutos: 30 },
+    { id: 2, fecha: "2026-10-06", tema: "HTML", minutos: 45 },
+  ];
+  const copia = JSON.parse(JSON.stringify(sesiones));
+
+  const sinUno = removeSession(sesiones, 1);
+
+  assert.equal(sinUno.length, 1);
+  assert.equal(sinUno[0].id, 2);
+  assert.deepStrictEqual(sesiones, copia); // the original keeps everything
+  assert.equal(isValidSession(copia[0]), true); // removed session still valid for undo
+});
+
+test("restoreSession brings the session back with its original values (RF-7)", () => {
+  const borrada = { id: 3, fecha: "2026-10-07", tema: "Ingles", minutos: 20 };
+  const lista = [{ id: 4, fecha: "2026-10-06", tema: "HTML", minutos: 45 }];
+
+  const restaurada = restoreSession(lista, borrada);
+
+  assert.equal(restaurada.length, 2);
+  assert.deepStrictEqual(restaurada[1], borrada); // same values
+  assert.equal(restaurada[1].id, 3);
+  assert.equal(restaurada[1].fecha, "2026-10-07");
+  assert.notEqual(restaurada, lista); // new array
+});
+
+// ---- Casos límite 1 y 2 de la spec ----
+
+test("case 1: deleting the only session leaves the list empty, undo restores it", () => {
+  const unica = { id: 9, fecha: "2026-10-05", tema: "CSS", minutos: 30 };
+  const sinNada = removeSession([unica], 9);
+  assert.deepStrictEqual(sinNada, []);
+  assert.deepStrictEqual(restoreSession(sinNada, unica), [unica]); // igual que al principio
+});
+
+test("case 2: sessions of the same day are independent (edit one, delete the other)", () => {
+  const sesiones = [
+    { id: 1, fecha: "2026-10-05", tema: "Manana", minutos: 20 },
+    { id: 2, fecha: "2026-10-05", tema: "Tarde", minutos: 40 },
+  ];
+
+  const resultado = editSession(sesiones, 1, { tema: "Manana corregido", minutos: 25 });
+  assert.equal(resultado.sessions.length, 2);
+  assert.equal(resultado.sessions[1].tema, "Tarde"); // la otra no se toca
+  assert.equal(resultado.sessions[1].minutos, 40);
+
+  const sinUna = removeSession(sesiones, 2);
+  assert.equal(sinUna.length, 1);
+  assert.equal(sinUna[0].tema, "Manana"); // la del mismo día se queda
 });

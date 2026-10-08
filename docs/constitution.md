@@ -2,14 +2,9 @@
 
 Principios innegociables. Toda spec, plan y tarea debe cumplirlos.
 
-1. **Simplicidad primero**: HTML, CSS y JS puros. Sin dependencias ni build. Funciona
-abriendo index.html con doble clic.
-2. **La spec manda**: nada se implementa si no está en la spec activa. Si falta una
-decisión, se para y se pregunta.
-3. **Lógica separada de interfaz**: los cálculos (fechas, rachas, estadísticas) son
-funciones puras, sin DOM ni localStorage, que reciben "hoy" como parámetro.
-4. **Tests como puerta**: la lógica se prueba con `node --test`, sin instalar paquetes.
-Prohibido avanzar con tests en rojo.
-5. **Los datos del usuario son sagrados**: localStorage con compatibilidad hacia atrás y
-fechas siempre en hora local. Nunca se pierde una sesión.
-6. **Idioma**: código en inglés; interfaz y documentación en español.
+1. **Stack**: solo HTML/CSS/JS puros, sin dependencias ni build. Se comprueba: `index.html` abre con doble clic y la consola queda limpia.
+2. **La spec manda**: solo se implementa lo que cubre la spec activa; si falta una decisión, se para y se pregunta. Se comprueba: cada RF tiene su tarea y su comprobación.
+3. **Lógica ≠ interfaz**: los cálculos van en funciones puras sin DOM ni localStorage y con `hoy` como parámetro (`logic.js`); `app.js` pinta y gestiona eventos. Migrar las `calcular*` de v1–v4 es deuda declarada.
+4. **Tests**: `node --test` en verde para terminar cualquier tarea, sin instalar nada. Un rojo bloquea el avance.
+5. **Datos sagrados**: clave `diarioEstudioSesiones` y formato `{ id, fecha, tema, minutos }` intactos; lo inválido se ignora, nunca se borra ni se repara. Se comprueba: tests de inmutabilidad en verde.
+6. **Idioma**: identificadores y comentarios en inglés; interfaz, specs y docs en español; fechas locales, nunca UTC.

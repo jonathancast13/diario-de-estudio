@@ -342,6 +342,162 @@ body {
   border-radius: 3px;
 }
 
+/* ===== Acciones de la lista: editar, borrar y deshacer (spec 002) ===== */
+
+.sesion-acciones {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.boton-fila {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--tinta);
+  background: var(--carta);
+  border: 1px solid var(--linea);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.boton-fila:hover {
+  background: #eef1f7;
+}
+
+.boton-fila:focus-visible {
+  outline: 2px solid var(--tinta);
+  outline-offset: 1px;
+}
+
+/* El rojo solo aparece en acciones que quitan datos */
+.boton-fila-peligro {
+  color: #b3261e;
+  border-color: #eec5c2;
+}
+
+.boton-fila-peligro:hover {
+  background: #fdf3f2;
+}
+
+/* Confirmación de borrado dentro de la fila (RF-4, RF-5) */
+.confirmacion-borrado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.confirmacion-texto {
+  flex: 1;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+/* Formulario de edición dentro de la fila (RF-1, RF-3) */
+.fila-edicion {
+  display: block; /* la fila entera es el formulario */
+}
+
+.edicion-formulario {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.edicion-campos {
+  display: flex;
+  gap: 8px;
+}
+
+.edicion-campos input {
+  padding: 8px 10px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: var(--tinta);
+  background: var(--carta);
+  border: 1px solid var(--linea);
+  border-radius: 8px;
+}
+
+.edicion-campos input:focus {
+  outline: 2px solid var(--tinta);
+  outline-offset: 1px;
+  border-color: var(--tinta);
+}
+
+.edicion-tema {
+  flex: 1;
+  min-width: 0;
+}
+
+.edicion-minutos {
+  width: 92px;
+  flex-shrink: 0;
+}
+
+.edicion-error {
+  margin: 0;
+  color: #b3261e;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.edicion-botones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.boton-guardar {
+  color: #ffffff;
+  background: var(--tinta);
+  border-color: var(--tinta);
+}
+
+.boton-guardar:hover {
+  background: #2c3a5c;
+}
+
+/* Aviso de deshacer, sobre resaltador (RF-6) */
+li.aviso-deshacer {
+  justify-content: space-between;
+  background: var(--marcador-suave);
+  border: 1px solid #f0dd8a;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.boton-deshacer {
+  padding: 6px 12px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--tinta);
+  background: var(--carta);
+  border: 1px solid var(--tinta);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.boton-deshacer:hover {
+  background: var(--tinta);
+  color: #ffffff;
+}
+
+.boton-deshacer:focus-visible {
+  outline: 2px solid var(--tinta);
+  outline-offset: 2px;
+}
+
 /* ===== Móvil ===== */
 
 @media (max-width: 480px) {
@@ -367,5 +523,22 @@ body {
 
   .tarjeta {
     padding: 16px;
+  }
+
+  /* Los botones de la fila quedan solo con el icono */
+  .boton-fila-texto {
+    display: none;
+  }
+
+  .boton-fila {
+    padding: 6px 8px;
+  }
+
+  .edicion-campos {
+    flex-direction: column;
+  }
+
+  .edicion-minutos {
+    width: 100%;
   }
 }

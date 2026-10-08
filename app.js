@@ -218,6 +218,20 @@ function pintarRacha() {
   diasMesTexto.textContent = diasMes === 1 ? "día" : "días";
 }
 
+// ---- Estado de edición y borrado (spec 002) ----
+
+let editandoId = null; // sesión que se está editando (null = ninguna)
+let confirmandoId = null; // sesión esperando confirmación para borrar
+let sesionBorrada = null; // copia de la sesión borrada, pendiente de deshacer
+let temporizadorDeshacer = null;
+const MS_DESHACER = 5000; // el aviso de deshacer vive 5 segundos (decisión T3)
+
+// logic.js devuelve códigos; el texto en español es cosa de la interfaz (T7)
+const TEXTO_ERROR_EDICION = {
+  emptyTopic: "El tema no puede estar vacío.",
+  invalidMinutes: "Los minutos deben ser un número mayor que 0.",
+};
+
 function pintarLista() {
   // Ordenamos de la sesión más reciente a la más antigua
   const ordenadas = [...sesiones].sort((a, b) => {
@@ -230,31 +244,280 @@ function pintarLista() {
   listaSesiones.innerHTML = "";
   mensajeVacio.style.display = ordenadas.length === 0 ? "block" : "none";
 
-  for (const sesion of ordenadas) {
-    const li = document.createElement("li");
-
-    const info = document.createElement("div");
-    info.className = "sesion-info";
-
-    const tema = document.createElement("span");
-    tema.className = "sesion-tema";
-    tema.textContent = sesion.tema;
-
-    const fecha = document.createElement("span");
-    fecha.className = "sesion-fecha";
-    fecha.textContent = fechaParaMostrar(sesion.fecha);
-
-    info.appendChild(tema);
-    info.appendChild(fecha);
-
-    const minutos = document.createElement("span");
-    minutos.className = "sesion-minutos";
-    minutos.textContent = `${sesion.minutos} min`;
-
-    li.appendChild(info);
-    li.appendChild(minutos);
-    listaSesiones.appendChild(li);
+  // El aviso de deshacer vive por encima de la lista hasta que caduque (RF-6)
+  if (sesionBorrada) {
+    listaSesiones.appendChild(crearAvisoDeshacer());
   }
+
+  for (const sesion of ordenadas) {
+    if (sesion.id === editandoId) {
+      const fila = crearFilaEdicion(sesion);
+      listaSesiones.appendChild(fila);
+      fila.querySelector(".edicion-tema").focus();
+    } else if (sesion.id === confirmandoId) {
+      listaSesiones.appendChild(crearConfirmacionBorrado(sesion));
+    } else {
+      listaSesiones.appendChild(crearFilaSesion(sesion));
+    }
+  }
+}
+
+// Fila normal: información, minutos y botones de Editar y Borrar
+function crearFilaSesion(sesion) {
+  const li = document.createElement("li");
+
+  const info = document.createElement("div");
+  info.className = "sesion-info";
+
+  const tema = document.createElement("span");
+  tema.className = "sesion-tema";
+  tema.textContent = sesion.tema;
+
+  const fecha = document.createElement("span");
+  fecha.className = "sesion-fecha";
+  fecha.textContent = fechaParaMostrar(sesion.fecha);
+
+  info.appendChild(tema);
+  info.appendChild(fecha);
+
+  const minutos = document.createElement("span");
+  minutos.className = "sesion-minutos";
+  minutos.textContent = `${sesion.minutos} min`;
+
+  li.appendChild(info);
+  li.appendChild(minutos);
+  li.appendChild(crearAcciones(sesion));
+  return li;
+}
+
+// Botones Editar y Borrar de cada fila (en móvil solo queda el icono)
+function crearAcciones(sesion) {
+  const acciones = document.createElement("div");
+  acciones.className = "sesion-acciones";
+
+  const botonEditar = crearBotonFila("Editar", "✎");
+  botonEditar.setAttribute("aria-label", `Editar la sesión: ${sesion.tema}`);
+  botonEditar.addEventListener("click", function () {
+    confirmandoId = null;
+    editandoId = sesion.id;
+    pintarLista();
+  });
+
+  const botonBorrar = crearBotonFila("Borrar", "✕");
+  botonBorrar.classList.add("boton-fila-peligro");
+  botonBorrar.setAttribute("aria-label", `Borrar la sesión: ${sesion.tema}`);
+  botonBorrar.addEventListener("click", function () {
+    editandoId = null;
+    confirmandoId = sesion.id;
+    pintarLista();
+  });
+
+  acciones.appendChild(botonEditar);
+  acciones.appendChild(botonBorrar);
+  return acciones;
+}
+
+// Botón pequeño: icono + texto (el texto se oculta en pantallas pequeñas)
+function crearBotonFila(texto, icono) {
+  const boton = document.createElement("button");
+  boton.type = "button";
+  boton.className = "boton-fila";
+  boton.title = texto;
+
+  const simbolo = document.createElement("span");
+  simbolo.textContent = icono;
+
+  const etiqueta = document.createElement("span");
+  etiqueta.className = "boton-fila-texto";
+  etiqueta.textContent = texto;
+
+  boton.appendChild(simbolo);
+  boton.appendChild(etiqueta);
+  return boton;
+}
+
+// Confirmación de borrado dentro de la propia fila (RF-4, RF-5):
+// hasta que no se pulsa "Borrar", la sesión sigue intacta
+function crearConfirmacionBorrado(sesion) {
+  const li = document.createElement("li");
+
+  const confirmacion = document.createElement("div");
+  confirmacion.className = "confirmacion-borrado";
+
+  const pregunta = document.createElement("span");
+  pregunta.className = "confirmacion-texto";
+  pregunta.textContent = "¿Borrar esta sesión?";
+
+  const botonBorrar = document.createElement("button");
+  botonBorrar.type = "button";
+  botonBorrar.className = "boton-fila boton-fila-peligro";
+  botonBorrar.textContent = "Borrar";
+  botonBorrar.addEventListener("click", function () {
+    borrarSesion(sesion.id);
+  });
+
+  const botonCancelar = document.createElement("button");
+  botonCancelar.type = "button";
+  botonCancelar.className = "boton-fila";
+  botonCancelar.textContent = "Cancelar";
+  botonCancelar.addEventListener("click", function () {
+    confirmandoId = null; // RF-5: nada cambia hasta que se confirme
+    pintarLista();
+  });
+
+  confirmacion.appendChild(pregunta);
+  confirmacion.appendChild(botonBorrar);
+  confirmacion.appendChild(botonCancelar);
+  li.appendChild(confirmacion);
+  return li;
+}
+
+// Formulario de edición dentro de la fila: solo Tema y Minutos (RF-3)
+function crearFilaEdicion(sesion) {
+  const li = document.createElement("li");
+  li.className = "fila-edicion";
+
+  const formulario = document.createElement("form");
+  formulario.className = "edicion-formulario";
+
+  const campos = document.createElement("div");
+  campos.className = "edicion-campos";
+
+  const tema = document.createElement("input");
+  tema.type = "text";
+  tema.className = "edicion-tema";
+  tema.value = sesion.tema;
+  tema.placeholder = "Ej. Javascript";
+  tema.setAttribute("aria-label", "Tema");
+
+  const minutos = document.createElement("input");
+  minutos.type = "number";
+  minutos.className = "edicion-minutos";
+  minutos.min = "1";
+  minutos.value = String(sesion.minutos);
+  minutos.setAttribute("aria-label", "Minutos");
+
+  campos.appendChild(tema);
+  campos.appendChild(minutos);
+
+  const error = document.createElement("p");
+  error.className = "edicion-error";
+  error.hidden = true;
+
+  const botones = document.createElement("div");
+  botones.className = "edicion-botones";
+
+  const botonGuardar = document.createElement("button");
+  botonGuardar.type = "submit";
+  botonGuardar.className = "boton-fila boton-guardar";
+  botonGuardar.textContent = "Guardar";
+
+  const botonCancelar = document.createElement("button");
+  botonCancelar.type = "button";
+  botonCancelar.className = "boton-fila";
+  botonCancelar.textContent = "Cancelar";
+  botonCancelar.addEventListener("click", function () {
+    editandoId = null;
+    pintarLista();
+  });
+
+  botones.appendChild(botonGuardar);
+  botones.appendChild(botonCancelar);
+
+  formulario.appendChild(campos);
+  formulario.appendChild(error);
+  formulario.appendChild(botones);
+
+  formulario.addEventListener("submit", function (evento) {
+    evento.preventDefault();
+    guardarEdicion(sesion.id, tema.value, minutos.value, error);
+  });
+
+  li.appendChild(formulario);
+  return li;
+}
+
+// Guarda la edición; si algo no vale, no se guarda nada y se avisa (RF-2)
+function guardarEdicion(id, tema, minutos, mensajeError) {
+  // El formulario convierte a número antes de validar (plan, sección 4)
+  const resultado = editSession(sesiones, id, {
+    tema: tema,
+    minutos: Number(minutos),
+  });
+
+  if (!resultado.ok) {
+    mensajeError.textContent = resultado.errors
+      .map((codigo) => TEXTO_ERROR_EDICION[codigo])
+      .join(" ");
+    mensajeError.hidden = false;
+    return; // el formulario se queda abierto con lo que se escribió
+  }
+
+  sesiones = resultado.sessions;
+  guardarSesiones();
+  editandoId = null;
+  pintarTodo(); // RF-8: racha, métricas y mapa en un solo pintado
+}
+
+// Borra la sesión ya confirmada y ofrece deshacer durante 5 s (RF-6)
+function borrarSesion(id) {
+  const borrada = sesiones.find((sesion) => sesion.id === id);
+  if (!borrada) return;
+
+  cancelarAvisoDeshacer(); // un borrado nuevo deja sin deshacer al anterior (T4)
+  sesionBorrada = borrada; // se guarda intacta: sirve para restaurarla (RF-7)
+  sesiones = removeSession(sesiones, id);
+  confirmandoId = null;
+  guardarSesiones();
+  pintarTodo(); // RF-8
+
+  temporizadorDeshacer = setTimeout(function () {
+    sesionBorrada = null;
+    temporizadorDeshacer = null;
+    // Solo quitamos el aviso: repintar la lista perdería lo que se esté
+    // escribiendo en otro formulario de edición
+    const aviso = document.querySelector(".aviso-deshacer");
+    if (aviso) aviso.remove();
+  }, MS_DESHACER);
+}
+
+// Quita el aviso pendiente (y su temporizador) sin restaurar nada
+function cancelarAvisoDeshacer() {
+  if (temporizadorDeshacer) {
+    clearTimeout(temporizadorDeshacer);
+    temporizadorDeshacer = null;
+  }
+  sesionBorrada = null;
+}
+
+// Deshace el último borrado mientras el aviso siga en pantalla (RF-7)
+function deshacerBorrado() {
+  if (!sesionBorrada) return;
+  // Guardamos la copia ANTES de cancelar el aviso, que la pone a null
+  const restaurar = sesionBorrada;
+  cancelarAvisoDeshacer();
+  sesiones = restoreSession(sesiones, restaurar);
+  guardarSesiones();
+  pintarTodo(); // RF-8
+}
+
+// Aviso «Sesión borrada · Deshacer» (RF-6)
+function crearAvisoDeshacer() {
+  const li = document.createElement("li");
+  li.className = "aviso-deshacer";
+
+  const texto = document.createElement("span");
+  texto.textContent = "Sesión borrada ·";
+
+  const boton = document.createElement("button");
+  boton.type = "button";
+  boton.className = "boton-deshacer";
+  boton.textContent = "Deshacer";
+  boton.addEventListener("click", deshacerBorrado);
+
+  li.appendChild(texto);
+  li.appendChild(boton);
+  return li;
 }
 
 // ---- Mapa de calor (specs/001-heat-map) ----
